@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>تسجيل مستخدم جديد</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        .form-group {
+            margin-bottom: 15px;
+        }
+        .progress-container {
+            width: 100%;
+            background-color: #e0e0e0;
+            border-radius: 4px;
+            margin: 10px 0;
+            height: 20px;
+        }
+        .progress-bar {
+            height: 100%;
+            background-color: #4a5568;
+            border-radius: 4px;
+            text-align: center;
+            color: white;
+            line-height: 20px;
+            transition: width 0.3s;
+        }
+        .instructions {
+            margin: 15px 0;
+            padding: 10px;
+            background-color: #f0f0f0;
+            border-radius: 4px;
+            text-align: center;
+        }
+        .center-button {
+            display: flex;
+            justify-content: center;
+            width: 100%;
+        }
+        .center-button button {
+            width: 150px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="logo">
+                <img src="left-logo.png" alt="Information Systems Logo">
+            </div>
+            
+            <div class="title">
+                <h1>جامعة طنطا</h1>
+                <p>مشروع نظم المعلومات الإدارية</p>
+                <p>وحدة تطوير النظم</p>
+                <p class="subtitle">تسجيل مستخدم جديد</p>
+            </div>
+            
+            <div class="logo">
+                <img src="right-logo.png" alt="University Logo">
+            </div>
+        </header>
+        
+        <main>
+            <div class="login-box">
+                <div id="registration-form">
+                    <div class="form-group">
+                        <label for="national-id">الرقم القومي:</label>
+                        <input type="text" id="national-id" placeholder="أدخل الرقم القومي (14 رقم)" maxlength="14">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="full-name">الاسم الكامل:</label>
+                        <input type="text" id="full-name" placeholder="أدخل الاسم الكامل">
+                    </div>
+                    
+                    <div class="form-group center-button">
+                        <button id="start-capture-button">بدء التقاط الصور</button>
+                    </div>
+                    
+                    <div class="form-group center-button" style="margin-top: 20px;">
+                        <a href="index.html" style="color: #4a5568; text-decoration: none;">
+                            العودة إلى صفحة تسجيل الدخول
+                        </a>
+                    </div>
+                </div>
+                
+                <div id="face-capture" style="display: none;">
+                    <h2>التقاط صور الوجه</h2>
+                    <p>سيتم التقاط 5 صور للوجه من زوايا مختلفة</p>
+                    
+                    <div class="instructions" id="pose-instruction">
+                        يرجى النظر مباشرة إلى الكاميرا
+                    </div>
+                    
+                    <div class="progress-container">
+                        <div class="progress-bar" id="capture-progress" style="width: 0%">0/5</div>
+                    </div>
+                    
+                    <div class="camera-container">
+                        <video id="video" autoplay playsinline></video>
+                        <canvas id="canvas" style="display: none;"></canvas>
+                    </div>
+                    
+                    <div class="button-group">
+                        <button id="capture-button">التقاط</button>
+                        <button id="cancel-button">إلغاء</button>
+                    </div>
+                </div>
+                
+                <div id="registration-complete" style="display: none;">
+                    <h2>تم التسجيل بنجاح!</h2>
+                    <p>تم تسجيل بياناتك بنجاح. يمكنك الآن تسجيل الدخول.</p>
+                    
+                    <div class="button-group">
+                        <a href="index.html"><button>العودة إلى صفحة تسجيل الدخول</button></a>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+    
+    <script>
+        // DOM Elements
+        const registrationForm = document.getElementById('registration-form');
+        const faceCapture = document.getElementById('face-capture');
+        const registrationComplete = document.getElementById('registration-complete');
+        const nationalIdInput = document.getElementById('national-id');
+        const fullNameInput = document.getElementById('full-name');
+        const startCaptureButton = document.getElementById('start-capture-button');
+        const captureButton = document.getElementById('capture-button');
+        const cancelButton = document.getElementById('cancel-button');
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const captureProgress = document.getElementById('capture-progress');
+        const poseInstruction = document.getElementById('pose-instruction');
+        
+        // Variables
+        let stream = null;
+        const API_URL = 'http://localhost:5000';
+        let capturedImages = [];
+        let captureCount = 0;
+        const totalCaptures = 5;
+        const poses = [
+            'يرجى النظر مباشرة إلى الكاميرا',
+            'يرجى إمالة رأسك قليلاً إلى اليمين',
+            'يرجى إمالة رأسك قليلاً إلى اليسار',
+            'يرجى رفع رأسك قليلاً للأعلى',
+            'يرجى خفض رأسك قليلاً للأسفل'
+        ];
+        
+        // Input validation for National ID
+        nationalIdInput.addEventListener('input', function(e) {
+            // Remove any non-digit characters
+            this.value = this.value.replace(/\D/g, '');
+            
+            // Limit to 14 digits
+            if (this.value.length > 14) {
+                this.value = this.value.slice(0, 14);
+            }
+        });
+        
+        // Function to check if all digits in a string are the same
+        function hasAllSameDigits(str) {
+            return /^(\d)\1+$/.test(str);
+        }
+        
+        // Event Listeners
+        startCaptureButton.addEventListener('click', checkIdAndStartCapture);
+        captureButton.addEventListener('click', captureImage);
+        cancelButton.addEventListener('click', cancelCapture);
+        
+        async function checkIdAndStartCapture() {
+            const nationalId = nationalIdInput.value.trim();
+            const fullName = fullNameInput.value.trim();
+            
+            // Validate National ID (must be exactly 14 digits)
+            if (!/^\d{14}$/.test(nationalId)) {
+                alert('الرجاء إدخال رقم قومي صحيح مكون من 14 رقم');
+                return;
+            }
+            
+            // Check if all digits are the same
+            if (hasAllSameDigits(nationalId)) {
+                alert('الرقم القومي غير صالح. لا يمكن أن تكون جميع الأرقام متطابقة.');
+                return;
+            }
+            
+            // Validate full name
+            if (!fullName) {
+                alert('الرجاء إدخال الاسم الكامل');
+                return;
+            }
+            
+            // Show loading state
+            startCaptureButton.textContent = 'جاري التحقق...';
+            startCaptureButton.disabled = true;
+            
+            try {
+                // Check if ID already exists
+                const response = await fetch(`${API_URL}/check-id`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ nationalId: nationalId })
+                });
+                
+                const result = await response.json();
+                
+                if (result.exists) {
+                    alert(result.message);
+                    startCaptureButton.textContent = 'بدء التقاط الصور';
+                    startCaptureButton.disabled = false;
+                    return;
+                }
+                
+                // ID doesn't exist, proceed with capture
+                // Reset capture variables
+                capturedImages = [];
+                captureCount = 0;
+                updateProgress();
+                
+                // Show face capture UI
+                registrationForm.style.display = 'none';
+                faceCapture.style.display = 'block';
+                
+                // Setup camera
+                setupCamera();
+                
+            } catch (error) {
+                console.error('Error:', error);
+                alert('حدث خطأ أثناء التحقق من الرقم القومي. يرجى المحاولة مرة أخرى.');
+                startCaptureButton.textContent = 'بدء التقاط الصور';
+                startCaptureButton.disabled = false;
+            }
+        }
+        
+        async function setupCamera() {
+            try {
+                // Stop any existing stream
+                if (stream) {
+                    stream.getTracks().forEach(track => track.stop());
+                }
+                
+                // Get new stream
+                stream = await navigator.mediaDevices.getUserMedia({
+                    video: true,
+                    audio: false
+                });
+                
+                video.srcObject = stream;
+                
+                // Update pose instruction
+                poseInstruction.textContent = poses[captureCount];
+            } catch (error) {
+                console.error('Error accessing camera:', error);
+                alert('لا يمكن الوصول إلى الكاميرا. يرجى التأكد من منح الأذونات المطلوبة.');
+                cancelCapture();
+            }
+        }
+        
+        function captureImage() {
+            const context = canvas.getContext('2d');
+            
+            // Set canvas dimensions to match video
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            
+            // Draw video frame to canvas
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+            
+            // Convert canvas to image
+            const imageDataUrl = canvas.toDataURL('image/png');
+            
+            // Add to captured images
+            capturedImages.push(imageDataUrl);
+            captureCount++;
+            
+            // Update progress
+            updateProgress();
+            
+            // Check if we've captured all images
+            if (captureCount >= totalCaptures) {
+                registerUser();
+            } else {
+                // Update pose instruction for next capture
+                poseInstruction.textContent = poses[captureCount];
+            }
+        }
+        
+        function updateProgress() {
+            const percentage = (captureCount / totalCaptures) * 100;
+            captureProgress.style.width = `${percentage}%`;
+            captureProgress.textContent = `${captureCount}/${totalCaptures}`;
+        }
+        
+        async function registerUser() {
+            try {
+                // Show loading state
+                captureButton.textContent = 'جاري التسجيل...';
+                captureButton.disabled = true;
+                cancelButton.disabled = true;
+                
+                // Get form data
+                const nationalId = nationalIdInput.value.trim();
+                const fullName = fullNameInput.value.trim();
+                
+                // Send registration data to server
+                const response = await fetch(`${API_URL}/register`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        nationalId: nationalId,
+                        fullName: fullName,
+                        images: capturedImages
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    // Show registration complete screen
+                    faceCapture.style.display = 'none';
+                    registrationComplete.style.display = 'block';
+                } else {
+                    alert(`فشل التسجيل: ${result.message}`);
+                    cancelCapture();
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('حدث خطأ أثناء التسجيل. يرجى المحاولة مرة أخرى.');
+                cancelCapture();
+            } finally {
+                // Reset buttons
+                captureButton.textContent = 'التقاط';
+                captureButton.disabled = false;
+                cancelButton.disabled = false;
+                
+                // Stop camera stream
+                if (stream) {
+                    stream.getTracks().forEach(track => track.stop());
+                    stream = null;
+                }
+            }
+        }
+        
+        function cancelCapture() {
+            // Stop camera stream
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+                stream = null;
+            }
+            
+            // Show registration form again
+            faceCapture.style.display = 'none';
+            registrationForm.style.display = 'block';
+            
+            // Reset button
+            startCaptureButton.textContent = 'بدء التقاط الصور';
+            startCaptureButton.disabled = false;
+        }
+    </script>
+</body>
+</html>
